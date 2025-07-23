@@ -690,6 +690,13 @@ const Index = () => {
                       
                       <Button 
                         variant="outline"
+                        onClick={() => setSelectedPlots(plots.map(p => p.id))}
+                      >
+                        Выбрать всё
+                      </Button>
+                      
+                      <Button 
+                        variant="outline"
                         onClick={() => setSelectedPlots([])}
                       >
                         Очистить
