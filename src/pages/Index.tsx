@@ -52,6 +52,32 @@ const Index = () => {
   const [newEmployee, setNewEmployee] = useState({ name: '', rank: 'рядовой' });
   const [emergencyCalls, setEmergencyCalls] = useState<EmergencyCall[]>([]);
   const [newPlot, setNewPlot] = useState({ address: '', phone: '' });
+  const [managingCall, setManagingCall] = useState<number | null>(null);
+  
+  // Звуковые уведомления
+  const playAlarmSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
+      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.3);
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.4);
+    } catch (error) {
+      console.log('Звук недоступен');
+    }
+  };
   
   // Создаем начальные участки (425 штук)
   const [plots, setPlots] = useState<PlotType[]>(() => {
@@ -148,6 +174,8 @@ const Index = () => {
   };
 
   const triggerEmergency = (plotId: number) => {
+    playAlarmSound(); // Звуковое уведомление
+    
     setPlots(prevPlots => 
       prevPlots.map(plot => {
         if (plot.id === plotId) {
@@ -170,6 +198,8 @@ const Index = () => {
   };
 
   const triggerAlarm = (plotId: number) => {
+    playAlarmSound(); // Звуковое уведомление
+    
     setPlots(prevPlots => 
       prevPlots.map(plot => {
         if (plot.id === plotId) {
@@ -228,6 +258,25 @@ const Index = () => {
         call.id === callId ? { ...call, assignedEmployee: employeeId } : call
       )
     );
+  };
+
+  const endEmergency = (plotId: number) => {
+    setPlots(prevPlots => 
+      prevPlots.map(plot => {
+        if (plot.id === plotId) {
+          return {
+            ...plot,
+            status: 'active', // Возвращаем к обычному режиму
+            history: [{ action: 'Конец тревоги', time: new Date().toLocaleString('ru-RU') }, ...plot.history]
+          };
+        }
+        return plot;
+      })
+    );
+    
+    // Удаляем вызов из списка
+    setEmergencyCalls(prev => prev.filter(call => call.plotId !== plotId));
+    setManagingCall(null);
   };
 
   const addCustomStatus = () => {
@@ -1010,17 +1059,25 @@ const Index = () => {
                           const plot = plots.find(p => p.id === call.plotId)!;
                           const employee = employees.find(e => e.id === call.assignedEmployee)!;
                           return (
-                            <div key={call.id} className={`p-3 rounded-lg ${
-                              theme === 'dark' ? 'bg-green-900/20 border border-green-500' : 'bg-green-50 border border-green-200'
-                            }`}>
+                            <div 
+                              key={call.id} 
+                              className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                                theme === 'dark' ? 'bg-green-900/20 border border-green-500 hover:bg-green-900/30' : 'bg-green-50 border border-green-200 hover:bg-green-100'
+                              }`}
+                              onClick={() => setManagingCall(call.plotId)}
+                            >
                               <div className="flex justify-between items-center">
                                 <div>
                                   <div className="font-medium">Участок {call.plotId}</div>
                                   <div className="text-sm text-green-600">Сотрудник выехал: {employee.name}</div>
+                                  <div className="text-xs text-gray-500 mt-1">Нажмите для управления</div>
                                 </div>
-                                <Badge className="bg-green-500 text-white">
-                                  Выехал
-                                </Badge>
+                                <div className="flex flex-col items-end gap-1">
+                                  <Badge className="bg-green-500 text-white">
+                                    Выехал
+                                  </Badge>
+                                  <Icon name="Settings" className="h-4 w-4 text-gray-400" />
+                                </div>
                               </div>
                             </div>
                           );
@@ -1040,6 +1097,102 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </div>
+      
+      {/* Индикатор активных вызовов */}
+      {emergencyCalls.filter(call => !call.assignedEmployee).length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-red-600 text-white py-3 px-6 z-50">
+          <div className="flex items-center justify-center gap-4">
+            <Icon name="AlertTriangle" className="h-6 w-6 animate-pulse" />
+            <span className="text-lg font-bold animate-pulse">
+              ВЫЗОВ - Активных вызовов: {emergencyCalls.filter(call => !call.assignedEmployee).length}
+            </span>
+            <Icon name="Siren" className="h-6 w-6 animate-pulse" />
+          </div>
+        </div>
+      )}
+      
+      {/* Модальное окно управления участком */}
+      {managingCall && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className={`w-96 max-w-md mx-4 ${
+            theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white'
+          }`}>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                Управление участком {managingCall}
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setManagingCall(null)}
+                >
+                  <Icon name="X" className="h-4 w-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const plot = plots.find(p => p.id === managingCall)!;
+                const call = emergencyCalls.find(c => c.plotId === managingCall && c.assignedEmployee);
+                const employee = call ? employees.find(e => e.id === call.assignedEmployee) : null;
+                
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div><strong>Адрес:</strong> {plot.address}</div>
+                      <div><strong>Телефон:</strong> {plot.phone}</div>
+                      <div className="flex items-center gap-2">
+                        <strong>Статус:</strong>
+                        <Badge 
+                          style={{ backgroundColor: getStatusColor(plot.status, plot.customStatus) }}
+                          className="text-white"
+                        >
+                          {getStatusText(plot.status, plot.customStatus)}
+                        </Badge>
+                      </div>
+                      {employee && (
+                        <div><strong>Назначенный сотрудник:</strong> {employee.name} ({employee.rank})</div>
+                      )}
+                      <div><strong>Батарея:</strong> {plot.battery}%</div>
+                      <Progress value={plot.battery} className="w-full" />
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => endEmergency(plot.id)}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                      >
+                        <Icon name="CheckCircle" className="h-4 w-4 mr-2" />
+                        Конец тревоге
+                      </Button>
+                      
+                      <Button 
+                        onClick={() => chargeBattery(plot.id)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Icon name="Battery" className="h-4 w-4 mr-1" />
+                        Зарядка
+                      </Button>
+                    </div>
+                    
+                    <div className="text-sm">
+                      <h4 className="font-medium mb-2">Последние действия:</h4>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {plot.history.slice(0, 5).map((event, index) => (
+                          <div key={index} className="flex justify-between text-xs">
+                            <span>{event.action}</span>
+                            <span className="text-gray-500">{event.time}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()} 
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
