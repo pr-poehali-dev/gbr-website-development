@@ -716,8 +716,17 @@ const Index = () => {
                       <div 
                         key={plot.id}
                         className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                          theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-yellow-100 hover:bg-yellow-200'
+                          selectedPlots.includes(plot.id)
+                            ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500'
+                            : theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-yellow-100 hover:bg-yellow-200'
                         }`}
+                        onClick={() => {
+                          if (selectedPlots.includes(plot.id)) {
+                            setSelectedPlots(prev => prev.filter(id => id !== plot.id));
+                          } else {
+                            setSelectedPlots(prev => [...prev, plot.id]);
+                          }
+                        }}
                       >
                         <div className="flex items-center gap-3">
                           <Checkbox 
@@ -729,6 +738,7 @@ const Index = () => {
                                 setSelectedPlots(prev => prev.filter(id => id !== plot.id));
                               }
                             }}
+                            onClick={(e) => e.stopPropagation()}
                           />
                           <div className="flex-1">
                             <div className="font-medium">Участок {plot.id}</div>
